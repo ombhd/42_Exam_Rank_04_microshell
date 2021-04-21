@@ -6,116 +6,67 @@
 /*   By: obouykou <obouykou@student.1337.ma>        +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2021/04/15 08:43:26 by obouykou          #+#    #+#             */
-/*   Updated: 2021/04/20 16:26:56 by obouykou         ###   ########.fr       */
+/*   Updated: 2021/04/21 14:52:16 by obouykou         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-#include <unistd.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include "microshell.h"
 
-#define STDIN 0
-#define STDOUT 1
-#define STDERR 2
-
-#define END 0
-#define S_COLON 1
-#define PIPE 2
-
-typedef struct s_cmds
-{
-	char **args;
-	char type;
-	int len;
-	int pipes[2];
-	struct s_cmds *next;
-	struct s_cmds *prev;
-} t_cmds;
-
-void ft_putstr_fd(char const *str, int fd)
+void	ft_putstr_fd(char const *str, int fd)
 {
 	while (*str)
 		write(fd, str++, 1);
 }
 
-void *fatal_exit(void)
+void	*fatal_ptr(void)
 {
 	ft_putstr_fd("error: fatal\n", STDERR);
 	exit(EXIT_FAILURE);
 	return (NULL);
 }
 
-size_t ft_strlen(char const *str)
+int		fatal_int(void)
 {
-	size_t l;
-
-	l = 0;
-	if (str)
-		while (*str++)
-			l++;
-	return (l);
+	ft_putstr_fd("error: fatal\n", STDERR);
+	exit(EXIT_FAILURE);
+	return (EXIT_FAILURE);
 }
 
-char *ft_strdup(char const *str)
+size_t	ft_strlen(char const *str)
 {
-	char *res;
-	int len;
+	size_t len;
 
-	len = ft_strlen(str);
-	if (!(res = (char *)malloc(len + 1)))
-		return (fatal_exit());
-	for (size_t i = 0; i < len; i++)
-	{
-		res[i] = str[i];
-	}
-	res[len] = '\0';
-	return (res);
+	len = 0;
+	while (*str++)
+		len++;
+	return (len);
 }
 
-t_cmds *get_list_head(t_cmds *cmds)
+void	push_arg(t_cmds *cmds, char *arg)
 {
-	while (cmds && cmds->prev)
-	{
-		cmds = cmds->prev;
-	}
-	return (cmds);
-}
-
-int push_arg(t_cmds *cmds, char const *arg)
-{
-	char **new_args;
+	char **temp;
 	int i;
 
-	if (!(new_args = (char **)malloc(sizeof(*new_args) * (cmds->len + 2))))
-		return ((int)fatal_exit());
+	if (!(temp = (char **)malloc(sizeof(char *) * (cmds->len + 2))))
+		fatal_int();
 	i = -1;
 	while (++i < cmds->len)
 	{
-		new_args[i] = cmds->args[i];
+		temp[i] = cmds->args[i];
 	}
-	if (cmds->len > 0)
-		free(cmds->args);
-	cmds->args = new_args;
-	cmds->args[i++] = ft_strdup(arg);
-	cmds->args[i] = NULL;
+	temp[i++] = arg;
+	temp[i] = NULL;
+	free(cmds->args);
+	cmds->args = temp;
 	cmds->len++;
-	return (EXIT_SUCCESS);
 }
 
-t_cmds *clear_list(t_cmds *cmds)
+t_cmds	*clear_list(t_cmds *cmds)
 {
-	int i;
 	void *tmp;
 
-	cmds = get_list_head(cmds);
 	while (cmds)
 	{
-		i = -1;
-		while (++i < cmds->len)
-		{
-			free(cmds->args[i]);
-		}
 		free(cmds->args);
 		cmds->args = NULL;
 		tmp = cmds->next;
@@ -125,12 +76,12 @@ t_cmds *clear_list(t_cmds *cmds)
 	return (NULL);
 }
 
-t_cmds *new_cmd_node(t_cmds **lst)
+t_cmds	*new_cmd_node(void)
 {
 	t_cmds *new;
 
 	if (!(new = (t_cmds *)malloc(sizeof(t_cmds))))
-		return ((t_cmds *)fatal_exit());
+		return (fatal_ptr());
 	new->next = NULL;
 	new->prev = NULL;
 	new->args = NULL;
@@ -139,11 +90,11 @@ t_cmds *new_cmd_node(t_cmds **lst)
 	return (new);
 }
 
-int push_cmd(t_cmds **cmds_list, char const *arg)
+void	push_front_cmd(t_cmds **cmds_list, char *arg)
 {
 	t_cmds *new;
 
-	new = new_cmd_node(cmds_list);
+	new = new_cmd_node();
 	push_arg(new, arg);
 	if (*cmds_list)
 	{
@@ -151,40 +102,43 @@ int push_cmd(t_cmds **cmds_list, char const *arg)
 		new->prev = *cmds_list;
 	}
 	*cmds_list = new;
-	return (EXIT_SUCCESS);
 }
 
-int parse_args(t_cmds **cmds, int ac, char const *av[])
+void	parse_args(t_cmds **cmds, int ac, char **av)
 {
-	size_t i;
-	char b;
+	int i;
+	char is_s_colon;
 
 	i = 0;
 	while (++i < ac)
 	{
-		b = (strcmp(av[i], ";") == 0);
-		if (b && !*cmds)
+		is_s_colon = (strcmp(av[i], ";") == 0);
+		if (is_s_colon && !*cmds)
 			continue;
-		if (!b && (!*cmds || (*cmds)->type != END))
-			push_cmd(cmds, av[i]);
-		else if (b)
+		if (!is_s_colon && (!*cmds || (*cmds)->type != END))
+			push_front_cmd(cmds, av[i]);
+		else if (is_s_colon)
 			(*cmds)->type = S_COLON;
 		else if (!strcmp(av[i], "|"))
 			(*cmds)->type = PIPE;
 		else
 			push_arg(*cmds, av[i]);
 	}
-	return (EXIT_SUCCESS);
+	while (*cmds && (*cmds)->prev)
+		*cmds = (*cmds)->prev;
 }
 
-int cd(t_cmds *cmds)
+int		cd(t_cmds *cmds)
 {
 	int ret;
 
-	ret = EXIT_FAILURE;
+	ret = EXIT_SUCCESS;
 	if (cmds->len != 2)
+	{
 		ft_putstr_fd("error: cd: bad arguments\n", STDERR);
-	if (cmds->len == 2)
+		ret = EXIT_FAILURE;
+	}
+	else
 	{
 		if ((ret = chdir(cmds->args[1])))
 		{
@@ -196,7 +150,31 @@ int cd(t_cmds *cmds)
 	return (ret);
 }
 
-int single_cmd_exec(t_cmds *cmd, char *const *env)
+void	run_child_process(t_cmds *cmd, char **env)
+{
+	int ret;
+	
+	ret = EXIT_SUCCESS;
+	if (cmd->type == PIPE)
+	{
+		if (dup2(cmd->fds[1], STDOUT) == -1)
+			fatal_int();
+	}
+	if (cmd->prev && cmd->prev->type == PIPE)
+	{
+		if (dup2(cmd->prev->fds[0], STDIN) == -1)
+			fatal_int();
+	}
+	if ((ret = execve(cmd->args[0], cmd->args, env)) == -1)
+	{
+		ft_putstr_fd("error: cannot execute ", STDERR);
+		ft_putstr_fd(cmd->args[0], STDERR);
+		ft_putstr_fd("\n", STDERR);
+	}
+	exit(ret);
+}
+
+int		single_cmd_exec(t_cmds *cmd, char **env)
 {
 	int ret;
 	pid_t pid;
@@ -208,70 +186,47 @@ int single_cmd_exec(t_cmds *cmd, char *const *env)
 	if (cmd->type == PIPE || (cmd->prev && cmd->prev->type == PIPE))
 	{
 		is_pipe_open = 1;
-		if (pipe(cmd->pipes))
-			return ((int)fatal_exit());
+		if (pipe(cmd->fds))
+			return (fatal_int());
 	}
 	if ((pid = fork()) == -1)
-		return ((int)fatal_exit());
+		return (fatal_int());
 	if (pid == 0)
-	{
-		if (cmd->type == PIPE)
-		{
-			if (dup2(cmd->pipes[1], STDOUT) == -1)
-				return ((int)fatal_exit());
-		}
-		if (cmd->prev && cmd->prev->type == PIPE)
-		{
-			if (dup2(cmd->prev->pipes[0], STDIN) == -1)
-				return ((int)fatal_exit());
-		}
-		if ((ret = execve(cmd->args[0], cmd->args, env)) == -1)
-		{
-			ft_putstr_fd("error: cannot execute ", STDERR);
-			ft_putstr_fd(cmd->args[0], STDERR);
-			ft_putstr_fd("\n", STDERR);
-		}
-		exit(ret);
-	}
+		run_child_process(cmd, env);
 	else
 	{
 		waitpid(pid, &status, 0);
 		if (is_pipe_open)
 		{
-			close(cmd->pipes[1]);
+			close(cmd->fds[1]);
 			if (cmd->type != PIPE)
-				close(cmd->pipes[0]);
+				close(cmd->fds[0]);
+			if (cmd->prev && cmd->prev->type == PIPE)
+				close(cmd->prev->fds[0]);
 		}
-		if (cmd->prev && cmd->prev->type == PIPE)
-			close(cmd->prev->pipes[0]);
 		if (WIFEXITED(status))
 			ret = WEXITSTATUS(status);
 	}
 	return (ret);
 }
 
-int cmds_exec(t_cmds *cmds, char *const *env)
+int		cmds_exec(t_cmds *cmds, char **env)
 {
 	int ret;
-	ret = EXIT_SUCCESS;
 
-	cmds = get_list_head(cmds);
+	ret = EXIT_SUCCESS;
 	while (cmds)
 	{
 		if (!strcmp(cmds->args[0], "cd"))
-		{
 			ret = cd(cmds);
-		}
 		else
 			ret = single_cmd_exec(cmds, env);
-		if (!cmds->next)
-			break;
 		cmds = cmds->next;
 	}
 	return (ret);
 }
 
-int main(int ac, char const *av[], char *const *env)
+int		main(int ac, char **av, char **env)
 {
 	t_cmds *cmds;
 	int ret;
@@ -279,8 +234,8 @@ int main(int ac, char const *av[], char *const *env)
 	cmds = NULL;
 	ret = EXIT_SUCCESS;
 	parse_args(&cmds, ac, av);
-	if (cmds)
-		ret = cmds_exec(cmds, env);
+	ret = cmds_exec(cmds, env);
+	getchar();
 	cmds = clear_list(cmds);
 	return (ret);
 }
